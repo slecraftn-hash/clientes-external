@@ -7,10 +7,9 @@ API_BASE = "http://155.117.40.185:10068/Wen0PWx!loa"
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     mensaje = (
-        "👋 **¡Bienvenido al Bot de Consulta de Licencias de CASAWA!**\n\n"
-        "Aquí puedes verificar el estado de tus accesos o llaves.\n\n"
-        "📌 **Comando disponible:**\n"
-        "• `/check [tu_key]` - Consulta el tiempo y estado de tu key."
+        "👋 **¡Bienvenido al Bot de Verificación!**\n\n"
+        "Usa el siguiente comando para comprobar tu key:\n"
+        "• `/check [tu_key]`"
     )
     await update.message.reply_text(mensaje, parse_mode="Markdown")
 
@@ -27,16 +26,26 @@ async def check_key(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         if response.status_code == 200:
             data = response.json()
-            # Mostramos el JSON exacto que devuelve la API para adaptarlo de inmediato
+            
+            # Comprobamos si la API responde con éxito (key válida)
+            if data.get("success") is True:
+                await update.message.reply_text(
+                    f"✅ La key `{user_key}` **está activa y funciona correctamente**.",
+                    parse_mode="Markdown"
+                )
+            else:
+                await update.message.reply_text(
+                    f"❌ La key `{user_key}` **no es válida o ha expirado**.",
+                    parse_mode="Markdown"
+                )
+        else:
             await update.message.reply_text(
-                f"🔍 **Respuesta de la API para `{user_key}`:**\n```json\n{data}\n```",
+                f"❌ La key `{user_key}` no existe en el sistema.",
                 parse_mode="Markdown"
             )
-        else:
-            await update.message.reply_text(f"❌ Error HTTP {response.status_code} al consultar la key.", parse_mode="Markdown")
             
     except Exception as e:
-        await update.message.reply_text(f"⚠️ Error de conexión: {e}")
+        await update.message.reply_text("⚠️ Ocurrió un error al conectar con el servidor de licencias.")
 
 if __name__ == '__main__':
     app = ApplicationBuilder().token(TOKEN).build()
@@ -44,5 +53,5 @@ if __name__ == '__main__':
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("check", check_key))
     
-    print("🤖 Bot de consultas conectado a la API iniciado...")
+    print("🤖 Bot de verificación iniciado...")
     app.run_polling()
