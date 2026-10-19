@@ -118,7 +118,6 @@ async def set_estado(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("⚠️ Opción no válida. Usa `verde` o `rojo`.", parse_mode="Markdown")
         return
 
-    # Notifica a la lista de usuarios
     await update.message.reply_text(f"🚀 Estado actualizado. Enviando notificación masiva a {len(usuarios_registrados)} usuario(s)...", parse_mode="Markdown")
     
     enviados = 0
@@ -178,4 +177,24 @@ async def say(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await context.bot.send_message(
         chat_id=update.effective_chat.id, 
         text=mensaje_a_enviar,
-        parse_mode
+        parse_mode="Markdown"
+    )
+
+if __name__ == '__main__':
+    app = ApplicationBuilder().token(TOKEN).build()
+    
+    # Handlers públicos
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("menu", menu))
+    app.add_handler(CommandHandler("menugeneral", menu_general))
+    app.add_handler(CommandHandler("contacto", contacto))
+    app.add_handler(CommandHandler("tutorial", tutorial))
+    app.add_handler(CommandHandler("estado", estado))
+    
+    # Handlers privados para el Administrador
+    app.add_handler(CommandHandler("setestado", set_estado))
+    app.add_handler(CommandHandler("mensaje", mensaje_masivo))
+    app.add_handler(CommandHandler("say", say))
+    
+    print("🤖 Bot listo con aviso masivo al cambiar estado...")
+    app.run_polling()
