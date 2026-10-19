@@ -7,21 +7,28 @@ TOKEN = "8657191025:AAFaZNt4IW-coJhQKbvgo4Uceu_BRNFSJHM"
 # Tu ID de Administrador configurado
 ADMIN_ID = 8046948909  
 
+# Conjunto en memoria para almacenar los IDs de los usuarios
+usuarios_registrados = set()
+
 # Estado global del servidor (por defecto en Verde / Activo)
 estado_servidor = {
     "activo": True,
     "mensaje": "🟢 **Estado del Servidor:** Operativo y funcionando al 100%."
 }
 
+async def registrar_usuario(user_id: int):
+    """Guarda el ID del usuario para poder enviarle notificaciones globales."""
+    usuarios_registrados.add(user_id)
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
+    await registrar_usuario(user_id)
     
     mensaje_publico = (
         "👋 **¡Bienvenido al Bot Oficial de CASAWA!**\n\n"
         "Usa el comando `/menu` para ver la lista de comandos disponibles."
     )
     
-    # Si eres el Administrador, incluye también la nota especial
     if user_id == ADMIN_ID:
         mensaje_publico += (
             "\n\n👑 **Hola Administrador:**\n"
@@ -31,29 +38,29 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
     await update.message.reply_text(mensaje_publico, parse_mode="Markdown")
 
-# Comando /menu (Privado para el Admin, Público para los clientes)
+# Comando /menu
 async def menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
+    await registrar_usuario(user_id)
     
     if user_id == ADMIN_ID:
-        # Menú exclusivo para ti
         mensaje_admin = (
             "👑 **Menú Privado de Administrador:**\n\n"
-            "• `/setestado verde` - Cambia el estado del servidor a Verde (Operativo).\n"
-            "• `/setestado rojo` - Cambia el estado del servidor a Rojo (Mantenimiento).\n"
+            "• `/setestado verde` - Cambia el estado público a Verde.\n"
+            "• `/setestado rojo` - Cambia el estado público a Rojo.\n"
+            "• `/estado [mensaje]` - Envía un anuncio sobre el estado a TODOS.\n"
             "• `/say [mensaje]` - Envía un mensaje a través del bot.\n"
             "• `/menugeneral` - Muestra el menú público de los clientes."
         )
         await update.message.reply_text(mensaje_admin, parse_mode="Markdown")
     else:
-        # Menú para todos los usuarios clientes
         await menu_general_texto(update)
 
-# Comando /menugeneral (Ver el menú público de los usuarios)
+# Comando /menugeneral
 async def menu_general(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await registrar_usuario(update.effective_user.id)
     await menu_general_texto(update)
 
-# Función auxiliar para enviar el menú público
 async def menu_general_texto(update: Update):
     mensaje_cliente = (
         "📌 **Menú General (Público):**\n\n"
@@ -63,8 +70,9 @@ async def menu_general_texto(update: Update):
     )
     await update.message.reply_text(mensaje_cliente, parse_mode="Markdown")
 
-# 1. Comando /contacto
+# Comando /contacto
 async def contacto(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await registrar_usuario(update.effective_user.id)
     mensaje = (
         "📩 **Contacto Oficial:**\n\n"
         "Puedes escribir directamente al administrador aquí:\n"
@@ -72,15 +80,37 @@ async def contacto(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     await update.message.reply_text(mensaje, parse_mode="Markdown")
 
-# 2. Comando /tutorial (en blanco)
+# Comando /tutorial
 async def tutorial(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await registrar_usuario(update.effective_user.id)
     await update.message.reply_text(" ")
 
-# 3. Comando /estado (Público)
+# Comando /estado (Consulta pública O Broadcast si el Admin incluye un mensaje)
 async def estado(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(estado_servidor["mensaje"], parse_mode="Markdown")
+    user_id = update.effective_user.id
+    await registrar_usuario(user_id)
 
-# 4. Comando /setestado (Solo tú puedes usarlo)
+    # Si el administrador incluye un mensaje tras el comando /estado [mensaje]
+    if user_id == ADMIN_ID and context.args:
+        mensaje_broadcast = " ".join(context.args)
+        aviso_completo = f"📢 **Aviso de Estado:**\n\n{mensaje_broadcast}"
+        
+        await update.message.reply_text(f"🚀 Enviando comunicado a {len(usuarios_registrados)} usuario(s)...")
+        
+        enviados = 0
+        for uid in list(usuarios_registrados):
+            try:
+                await context.bot.send_message(chat_id=uid, text=aviso_completo, parse_mode="Markdown")
+                enviados += 1
+            except Exception:
+                pass
+                
+        await update.message.reply_text(f"✅ Anuncio de estado enviado con éxito a {enviados} usuario(s).")
+    else:
+        # Consulta normal para cualquier usuario (muestra el mensaje actual en rojo o verde)
+        await update.message.reply_text(estado_servidor["mensaje"], parse_mode="Markdown")
+
+# Comando /setestado (Solo tú) - Modifica el resultado de /estado para todos
 async def set_estado(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     
@@ -96,17 +126,17 @@ async def set_estado(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if opcion in ["verde", "on", "activo"]:
         estado_servidor["activo"] = True
         estado_servidor["mensaje"] = "🟢 **Estado del Servidor:** Operativo y funcionando al 100%."
-        await update.message.reply_text("✅ Estado cambiado a **VERDE** (Operativo).", parse_mode="Markdown")
+        await update.message.reply_text("✅ Estado público actualizado a **VERDE** (Operativo). Ahora cualquier usuario que use `/estado` lo verá en verde.", parse_mode="Markdown")
         
     elif opcion in ["rojo", "off", "mantenimiento"]:
         estado_servidor["activo"] = False
         estado_servidor["mensaje"] = "🔴 **Estado del Servidor:** En mantenimiento / Fuera de servicio."
-        await update.message.reply_text("🔴 Estado cambiado a **ROJO** (Mantenimiento).", parse_mode="Markdown")
+        await update.message.reply_text("🔴 Estado público actualizado a **ROJO** (Mantenimiento). Ahora cualquier usuario que use `/estado` lo verá en rojo.", parse_mode="Markdown")
         
     else:
         await update.message.reply_text("⚠️ Opción no válida. Usa `verde` o `rojo`.", parse_mode="Markdown")
 
-# 5. Comando /say para enviar mensajes mediante el bot (Solo tú)
+# Comando /say (Solo tú)
 async def say(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     
@@ -145,5 +175,5 @@ if __name__ == '__main__':
     app.add_handler(CommandHandler("setestado", set_estado))
     app.add_handler(CommandHandler("say", say))
     
-    print("🤖 Bot cliente iniciado con menú general...")
+    print("🤖 Bot cargado y listo...")
     app.run_polling()
