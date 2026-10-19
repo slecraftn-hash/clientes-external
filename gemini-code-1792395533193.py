@@ -27,30 +27,16 @@ async def check_key(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         if response.status_code == 200:
             data = response.json()
-            
-            # Verificamos si la API indica éxito o si trae los datos de la key
-            if data.get("success") or "days" in data or "time" in data:
-                # Puedes adaptar estas variables según los nombres exactos que devuelva tu API
-                estado = data.get("status", "Activa")
-                dias = data.get("days", data.get("tiempo", "Desconocido"))
-                
-                await update.message.reply_text(
-                    f"✅ **Estado de la Key**\n\n"
-                    f"🔑 Key: `{user_key}`\n"
-                    f"🟢 Estado: **{estado}**\n"
-                    f"⏳ Tiempo restante: **{dias}**",
-                    parse_mode="Markdown"
-                )
-            else:
-                await update.message.reply_text(
-                    f"❌ La key `{user_key}` no es válida o ha expirado.",
-                    parse_mode="Markdown"
-                )
+            # Mostramos el JSON exacto que devuelve la API para adaptarlo de inmediato
+            await update.message.reply_text(
+                f"🔍 **Respuesta de la API para `{user_key}`:**\n```json\n{data}\n```",
+                parse_mode="Markdown"
+            )
         else:
-            await update.message.reply_text(f"❌ La key `{user_key}` no existe en el sistema.", parse_mode="Markdown")
+            await update.message.reply_text(f"❌ Error HTTP {response.status_code} al consultar la key.", parse_mode="Markdown")
             
     except Exception as e:
-        await update.message.reply_text("⚠️ Ocurrió un error al conectar con el servidor de licencias.")
+        await update.message.reply_text(f"⚠️ Error de conexión: {e}")
 
 if __name__ == '__main__':
     app = ApplicationBuilder().token(TOKEN).build()
