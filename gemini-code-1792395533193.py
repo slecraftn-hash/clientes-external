@@ -18,22 +18,40 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     mensaje_publico = (
         "👋 **¡Bienvenido al Bot Oficial de CASAWA!**\n\n"
-        "📌 **Comandos disponibles:**\n"
-        "• `/contacto` - Información de contacto.\n"
-        "• `/tutorial` - Guía e instrucciones.\n"
-        "• `/estado` - Consulta el estado del servidor."
+        "Usa el comando `/menu` para ver la lista de comandos disponibles."
     )
     
-    # Solo tú (ADMIN_ID) verás estos comandos especiales en el /start
+    # Si eres el Administrador, incluye también la nota especial
     if user_id == ADMIN_ID:
         mensaje_publico += (
-            "\n\n👑 **Comandos Secretos de Administrador:**\n"
-            "• `/setestado verde` - Cambia el estado a Verde.\n"
-            "• `/setestado rojo` - Cambia el estado a Rojo.\n"
-            "• `/say [mensaje]` - Envía un mensaje público a través del bot."
+            "\n\n👑 **Hola Administrador:**\n"
+            "Usa `/menu` para ver tus comandos de control."
         )
         
     await update.message.reply_text(mensaje_publico, parse_mode="Markdown")
+
+# Comando /menu (Muestra un menú personalizado según quién lo pida)
+async def menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    
+    if user_id == ADMIN_ID:
+        # Menú exclusivo para ti
+        mensaje_admin = (
+            "👑 **Menú Privado de Administrador:**\n\n"
+            "• `/setestado verde` - Cambia el estado del servidor a Verde (Operativo).\n"
+            "• `/setestado rojo` - Cambia el estado del servidor a Rojo (Mantenimiento).\n"
+            "• `/say [mensaje]` - Envía un mensaje a través del bot."
+        )
+        await update.message.reply_text(mensaje_admin, parse_mode="Markdown")
+    else:
+        # Menú para todos los usuarios clientes
+        mensaje_cliente = (
+            "📌 **Menú de Comandos Disponibles:**\n\n"
+            "• `/contacto` - Información de contacto.\n"
+            "• `/tutorial` - Guía e instrucciones.\n"
+            "• `/estado` - Consulta el estado del servidor."
+        )
+        await update.message.reply_text(mensaje_cliente, parse_mode="Markdown")
 
 # 1. Comando /contacto
 async def contacto(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -44,9 +62,8 @@ async def contacto(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     await update.message.reply_text(mensaje, parse_mode="Markdown")
 
-# 2. Comando /tutorial (dejado completamente en blanco)
+# 2. Comando /tutorial (en blanco)
 async def tutorial(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # Mensaje completamente en blanco
     await update.message.reply_text(" ")
 
 # 3. Comando /estado (Público)
@@ -57,7 +74,6 @@ async def estado(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def set_estado(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     
-    # Bloqueo para usuarios comunes
     if user_id != ADMIN_ID:
         return
 
@@ -84,7 +100,6 @@ async def set_estado(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def say(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     
-    # Bloqueo para usuarios comunes
     if user_id != ADMIN_ID:
         return
 
@@ -94,7 +109,6 @@ async def say(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     mensaje_a_enviar = " ".join(context.args)
     
-    # Intenta borrar el comando enviado por ti para dejar solo la respuesta del bot
     try:
         await update.message.delete()
     except Exception:
@@ -111,6 +125,7 @@ if __name__ == '__main__':
     
     # Handlers públicos
     app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("menu", menu))
     app.add_handler(CommandHandler("contacto", contacto))
     app.add_handler(CommandHandler("tutorial", tutorial))
     app.add_handler(CommandHandler("estado", estado))
@@ -119,5 +134,5 @@ if __name__ == '__main__':
     app.add_handler(CommandHandler("setestado", set_estado))
     app.add_handler(CommandHandler("say", say))
     
-    print("🤖 Bot cliente iniciado correctamente...")
+    print("🤖 Bot cliente iniciado con menú dinámico...")
     app.run_polling()
