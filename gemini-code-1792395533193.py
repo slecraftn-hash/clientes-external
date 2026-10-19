@@ -27,7 +27,6 @@ async def check_key(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         if response.status_code == 200:
             data = response.json()
-            # Puedes personalizar este mensaje según lo que devuelva exactamente tu API
             await update.message.reply_text(
                 f"✅ **Estado de la Key**\n\n"
                 f"🔑 Key: `{user_key}`\n"
@@ -35,7 +34,7 @@ async def check_key(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 parse_mode="Markdown"
             )
         else:
-            await update.message.reply_text(f"❌ La key `{user_key}` no existe o es inválida.", parse_mode="Markdown")
+            await update.message.reply_text(f"❌ La key `{user_key}` no existe o es inválida.", parse_Mode="Markdown")
             
     except Exception as e:
         await update.message.reply_text("⚠️ Ocurrió un error al conectar con el servidor de licencias.")
