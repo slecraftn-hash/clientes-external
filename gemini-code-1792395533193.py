@@ -1,57 +1,123 @@
-import requests
+import logging
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 
 TOKEN = "8657191025:AAFaZNt4IW-coJhQKbvgo4Uceu_BRNFSJHM"
-API_BASE = "http://155.117.40.185:10068/Wen0PWx!loa"
+
+# Tu ID de Administrador configurado
+ADMIN_ID = 8046948909  
+
+# Estado global del servidor (por defecto en Verde / Activo)
+estado_servidor = {
+    "activo": True,
+    "mensaje": "🟢 **Estado del Servidor:** Operativo y funcionando al 100%."
+}
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    
+    mensaje_publico = (
+        "👋 **¡Bienvenido al Bot Oficial de CASAWA!**\n\n"
+        "📌 **Comandos disponibles:**\n"
+        "• `/contacto` - Información de contacto.\n"
+        "• `/tutorial` - Guía e instrucciones.\n"
+        "• `/estado` - Consulta el estado del servidor."
+    )
+    
+    # Solo tú (ADMIN_ID) verás estos comandos especiales en el /start
+    if user_id == ADMIN_ID:
+        mensaje_publico += (
+            "\n\n👑 **Comandos Secretos de Administrador:**\n"
+            "• `/setestado verde` - Cambia el estado a Verde.\n"
+            "• `/setestado rojo` - Cambia el estado a Rojo.\n"
+            "• `/say [mensaje]` - Envía un mensaje público a través del bot."
+        )
+        
+    await update.message.reply_text(mensaje_publico, parse_mode="Markdown")
+
+# 1. Comando /contacto
+async def contacto(update: Update, context: ContextTypes.DEFAULT_TYPE):
     mensaje = (
-        "👋 **¡Bienvenido al Bot de Verificación!**\n\n"
-        "Usa el siguiente comando para comprobar tu key:\n"
-        "• `/check [tu_key]`"
+        "📩 **Contacto Oficial:**\n\n"
+        "Puedes escribir directamente al administrador aquí:\n"
+        "👉 @casawaxit"
     )
     await update.message.reply_text(mensaje, parse_mode="Markdown")
 
-async def check_key(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not context.args:
-        await update.message.reply_text("⚠️ Uso correcto: `/check [tu_key]`", parse_mode="Markdown")
+# 2. Comando /tutorial (dejado completamente en blanco)
+async def tutorial(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # Mensaje completamente en blanco
+    await update.message.reply_text(" ")
+
+# 3. Comando /estado (Público)
+async def estado(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(estado_servidor["mensaje"], parse_mode="Markdown")
+
+# 4. Comando /setestado (Solo tú puedes usarlo)
+async def set_estado(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    
+    # Bloqueo para usuarios comunes
+    if user_id != ADMIN_ID:
         return
 
-    user_key = context.args[0]
-    url = f"{API_BASE}/check?key={user_key}"
+    if not context.args:
+        await update.message.reply_text("⚠️ Uso correcto: `/setestado verde` o `/setestado rojo`", parse_mode="Markdown")
+        return
 
-    try:
-        response = requests.get(url, timeout=10)
+    opcion = context.args[0].lower()
+
+    if opcion in ["verde", "on", "activo"]:
+        estado_servidor["activo"] = True
+        estado_servidor["mensaje"] = "🟢 **Estado del Servidor:** Operativo y funcionando al 100%."
+        await update.message.reply_text("✅ Estado cambiado a **VERDE** (Operativo).", parse_mode="Markdown")
         
-        if response.status_code == 200:
-            data = response.json()
-            
-            # Comprobamos si la API responde con éxito (key válida)
-            if data.get("success") is True:
-                await update.message.reply_text(
-                    f"✅ La key `{user_key}` **está activa y funciona correctamente**.",
-                    parse_mode="Markdown"
-                )
-            else:
-                await update.message.reply_text(
-                    f"❌ La key `{user_key}` **no es válida o ha expirado**.",
-                    parse_mode="Markdown"
-                )
-        else:
-            await update.message.reply_text(
-                f"❌ La key `{user_key}` no existe en el sistema.",
-                parse_mode="Markdown"
-            )
-            
-    except Exception as e:
-        await update.message.reply_text("⚠️ Ocurrió un error al conectar con el servidor de licencias.")
+    elif opcion in ["rojo", "off", "mantenimiento"]:
+        estado_servidor["activo"] = False
+        estado_servidor["mensaje"] = "🔴 **Estado del Servidor:** En mantenimiento / Fuera de servicio."
+        await update.message.reply_text("🔴 Estado cambiado a **ROJO** (Mantenimiento).", parse_mode="Markdown")
+        
+    else:
+        await update.message.reply_text("⚠️ Opción no válida. Usa `verde` o `rojo`.", parse_mode="Markdown")
+
+# 5. Comando /say para enviar mensajes mediante el bot (Solo tú)
+async def say(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    
+    # Bloqueo para usuarios comunes
+    if user_id != ADMIN_ID:
+        return
+
+    if not context.args:
+        await update.message.reply_text("⚠️ Uso: `/say [mensaje]`", parse_mode="Markdown")
+        return
+
+    mensaje_a_enviar = " ".join(context.args)
+    
+    # Intenta borrar el comando enviado por ti para dejar solo la respuesta del bot
+    try:
+        await update.message.delete()
+    except Exception:
+        pass
+
+    await context.bot.send_message(
+        chat_id=update.effective_chat.id, 
+        text=mensaje_a_enviar,
+        parse_mode="Markdown"
+    )
 
 if __name__ == '__main__':
     app = ApplicationBuilder().token(TOKEN).build()
     
+    # Handlers públicos
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("check", check_key))
+    app.add_handler(CommandHandler("contacto", contacto))
+    app.add_handler(CommandHandler("tutorial", tutorial))
+    app.add_handler(CommandHandler("estado", estado))
     
-    print("🤖 Bot de verificación iniciado...")
+    # Handlers privados para el Administrador
+    app.add_handler(CommandHandler("setestado", set_estado))
+    app.add_handler(CommandHandler("say", say))
+    
+    print("🤖 Bot cliente iniciado correctamente...")
     app.run_polling()
