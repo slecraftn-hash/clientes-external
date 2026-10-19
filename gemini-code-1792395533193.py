@@ -10,10 +10,16 @@ ADMIN_ID = 8046948909
 # Conjunto en memoria para almacenar los IDs de los usuarios
 usuarios_registrados = set()
 
-# Estado global del servidor (por defecto en Verde / Activo)
-estado_servidor = {
-    "activo": True,
-    "mensaje": "🟢 **Estado del Servidor:** Operativo y funcionando al 100%."
+# Estados globales de los dos servicios
+servicios_estado = {
+    "external": {
+        "activo": True,
+        "nombre": "External"
+    },
+    "proxy": {
+        "activo": True,
+        "nombre": "Proxy"
+    }
 }
 
 async def registrar_usuario(user_id: int):
@@ -46,10 +52,10 @@ async def menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if user_id == ADMIN_ID:
         mensaje_admin = (
             "👑 **Menú Privado de Administrador:**\n\n"
-            "• `/setestado verde` - Cambia estado a Verde y notifica a TODOS.\n"
-            "• `/setestado rojo` - Cambia estado a Rojo y notifica a TODOS.\n"
+            "• `/setexternal verde` / `/setexternal rojo` - Cambia estado de External y notifica.\n"
+            "• `/setproxy verde` / `/setproxy rojo` - Cambia estado de Proxy y notifica.\n"
             "• `/mensaje [texto]` - Envía un comunicado masivo a TODOS.\n"
-            "• `/say [texto]` - Envía un mensaje como si fuera el bot en este chat.\n"
+            "• `/say [texto]` - Envía un mensaje como el bot en este chat.\n"
             "• `/menugeneral` - Muestra el menú público de los clientes."
         )
         await update.message.reply_text(mensaje_admin, parse_mode="Markdown")
@@ -66,7 +72,7 @@ async def menu_general_texto(update: Update):
         "📌 **Menú General (Público):**\n\n"
         "• `/contacto` - Información de contacto.\n"
         "• `/tutorial` - Guía e instrucciones.\n"
-        "• `/estado` - Consulta el estado del servidor."
+        "• `/estado` - Consulta el estado del External y Proxy."
     )
     await update.message.reply_text(mensaje_cliente, parse_mode="Markdown")
 
@@ -85,40 +91,48 @@ async def tutorial(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await registrar_usuario(update.effective_user.id)
     await update.message.reply_text(" ")
 
-# Comando /estado (Consulta pública)
+# Comando /estado (Muestra el estado actual de ambos servicios)
 async def estado(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await registrar_usuario(update.effective_user.id)
-    await update.message.reply_text(estado_servidor["mensaje"], parse_mode="Markdown")
-
-# Comando /setestado (Solo Admin) - Cambia el estado público Y NOTIFICA A TODOS
-async def set_estado(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
     
+    ext_icon = "🟢" if servicios_estado["external"]["activo"] else "🔴"
+    ext_txt = "Operativo" if servicios_estado["external"]["activo"] else "En Mantenimiento"
+    
+    proxy_icon = "🟢" if servicios_estado["proxy"]["activo"] else "🔴"
+    proxy_txt = "Operativo" if servicios_estado["proxy"]["activo"] else "En Mantenimiento"
+
+    mensaje_estado = (
+        "📊 **Estado Actual de los Servicios:**\n\n"
+        f"{ext_icon} **External:** {ext_txt}\n"
+        f"{proxy_icon} **Proxy:** {proxy_txt}"
+    )
+    await update.message.reply_text(mensaje_estado, parse_mode="Markdown")
+
+# Función auxiliar para procesar el cambio de estado de un servicio
+async def procesar_cambio_estado(update: Update, context: ContextTypes.DEFAULT_TYPE, servicio_key: str):
+    user_id = update.effective_user.id
     if user_id != ADMIN_ID:
         return
 
     if not context.args:
-        await update.message.reply_text("⚠️ Uso correcto: `/setestado verde` o `/setestado rojo`", parse_mode="Markdown")
+        await update.message.reply_text(f"⚠️ Uso correcto: `/set{servicio_key} verde` o `/set{servicio_key} rojo`", parse_mode="Markdown")
         return
 
     opcion = context.args[0].lower()
+    nombre_servicio = servicios_estado[servicio_key]["nombre"]
     notificacion = ""
 
     if opcion in ["verde", "on", "activo"]:
-        estado_servidor["activo"] = True
-        estado_servidor["mensaje"] = "🟢 **Estado del Servidor:** Operativo y funcionando al 100%."
-        notificacion = "📢 **Actualización del Servidor:**\n\n🟢 El servidor se encuentra **OPERATIVO** y funcionando al 100%."
-        
+        servicios_estado[servicio_key]["activo"] = True
+        notificacion = f"📢 **Actualización de Servicio:**\n\n🟢 El servicio **{nombre_servicio}** se encuentra **OPERATIVO** y funcionando al 100%."
     elif opcion in ["rojo", "off", "mantenimiento"]:
-        estado_servidor["activo"] = False
-        estado_servidor["mensaje"] = "🔴 **Estado del Servidor:** En mantenimiento / Fuera de servicio."
-        notificacion = "📢 **Actualización del Servidor:**\n\n🔴 El servidor ha entrado en **MANTENIMIENTO**. Les avisaremos cuando esté activo nuevamente."
-        
+        servicios_estado[servicio_key]["activo"] = False
+        notificacion = f"📢 **Actualización de Servicio:**\n\n🔴 El servicio **{nombre_servicio}** ha entrado en **MANTENIMIENTO**. Les avisaremos cuando esté activo nuevamente."
     else:
         await update.message.reply_text("⚠️ Opción no válida. Usa `verde` o `rojo`.", parse_mode="Markdown")
         return
 
-    await update.message.reply_text(f"🚀 Estado actualizado. Enviando notificación masiva a {len(usuarios_registrados)} usuario(s)...", parse_mode="Markdown")
+    await update.message.reply_text(f"🚀 Estado de **{nombre_servicio}** actualizado. Enviando notificación masiva a {len(usuarios_registrados)} usuario(s)...", parse_mode="Markdown")
     
     enviados = 0
     for uid in list(usuarios_registrados):
@@ -128,12 +142,19 @@ async def set_estado(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception:
             pass
 
-    await update.message.reply_text(f"✅ Notificación de estado enviada con éxito a {enviados} usuario(s).")
+    await update.message.reply_text(f"✅ Notificación de **{nombre_servicio}** enviada con éxito a {enviados} usuario(s).")
+
+# Comando /setexternal (Solo Admin)
+async def set_external(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await procesar_cambio_estado(update, context, "external")
+
+# Comando /setproxy (Solo Admin)
+async def set_proxy(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await procesar_cambio_estado(update, context, "proxy")
 
 # Comando /mensaje (Solo Admin) - Envío masivo personalizado
 async def mensaje_masivo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
-    
     if user_id != ADMIN_ID:
         return
 
@@ -159,7 +180,6 @@ async def mensaje_masivo(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # Comando /say (Solo Admin)
 async def say(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
-    
     if user_id != ADMIN_ID:
         return
 
@@ -168,7 +188,6 @@ async def say(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     mensaje_a_enviar = " ".join(context.args)
-    
     try:
         await update.message.delete()
     except Exception:
@@ -192,9 +211,10 @@ if __name__ == '__main__':
     app.add_handler(CommandHandler("estado", estado))
     
     # Handlers privados para el Administrador
-    app.add_handler(CommandHandler("setestado", set_estado))
+    app.add_handler(CommandHandler("setexternal", set_external))
+    app.add_handler(CommandHandler("setproxy", set_proxy))
     app.add_handler(CommandHandler("mensaje", mensaje_masivo))
     app.add_handler(CommandHandler("say", say))
     
-    print("🤖 Bot listo con aviso masivo al cambiar estado...")
+    print("🤖 Bot listo con control individual de External y Proxy...")
     app.run_polling()
