@@ -27,14 +27,27 @@ async def check_key(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         if response.status_code == 200:
             data = response.json()
-            await update.message.reply_text(
-                f"✅ **Estado de la Key**\n\n"
-                f"🔑 Key: `{user_key}`\n"
-                f"📄 Respuesta del servidor:\n```json\n{data}\n```",
-                parse_mode="Markdown"
-            )
+            
+            # Verificamos si la API indica éxito o si trae los datos de la key
+            if data.get("success") or "days" in data or "time" in data:
+                # Puedes adaptar estas variables según los nombres exactos que devuelva tu API
+                estado = data.get("status", "Activa")
+                dias = data.get("days", data.get("tiempo", "Desconocido"))
+                
+                await update.message.reply_text(
+                    f"✅ **Estado de la Key**\n\n"
+                    f"🔑 Key: `{user_key}`\n"
+                    f"🟢 Estado: **{estado}**\n"
+                    f"⏳ Tiempo restante: **{dias}**",
+                    parse_mode="Markdown"
+                )
+            else:
+                await update.message.reply_text(
+                    f"❌ La key `{user_key}` no es válida o ha expirado.",
+                    parse_mode="Markdown"
+                )
         else:
-            await update.message.reply_text(f"❌ La key `{user_key}` no existe o es inválida.", parse_Mode="Markdown")
+            await update.message.reply_text(f"❌ La key `{user_key}` no existe en el sistema.", parse_mode="Markdown")
             
     except Exception as e:
         await update.message.reply_text("⚠️ Ocurrió un error al conectar con el servidor de licencias.")
