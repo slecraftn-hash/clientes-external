@@ -22,14 +22,35 @@ servicios_estado = {
     }
 }
 
-async def registrar_usuario(user_id: int):
-    """Guarda el ID del usuario para poder enviarle notificaciones globales."""
-    usuarios_registrados.add(user_id)
-
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    await registrar_usuario(user_id)
+    user = update.effective_user
+    user_id = user.id
     
+    # Notifica al Administrador únicamente si es la primera vez que inicia el bot
+    if user_id not in usuarios_registrados:
+        usuarios_registrados.add(user_id)
+        
+        # Si no eres tú mismo, te manda la alerta de nuevo registro
+        if user_id != ADMIN_ID:
+            username = f"@{user.username}" if user.username else "Sin username"
+            nombre = user.full_name or "Usuario"
+
+            mensaje_registro = (
+                f"🎉 **¡Nuevo Usuario Registrado!**\n\n"
+                f"👤 **Nombre:** {nombre}\n"
+                f"🏷️ **User:** {username}\n"
+                f"🆔 **ID:** `{user_id}`\n"
+                f"📊 **Total registrados:** {len(usuarios_registrados)}"
+            )
+            try:
+                await context.bot.send_message(
+                    chat_id=ADMIN_ID,
+                    text=mensaje_registro,
+                    parse_mode="Markdown"
+                )
+            except Exception:
+                pass
+
     mensaje_publico = (
         "👋 **¡Bienvenido al Bot Oficial de CASAWA!**\n\n"
         "Usa el comando `/menu` para ver la lista de comandos disponibles."
@@ -47,7 +68,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # Comando /menu
 async def menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
-    await registrar_usuario(user_id)
     
     if user_id == ADMIN_ID:
         mensaje_admin = (
@@ -64,7 +84,6 @@ async def menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # Comando /menugeneral
 async def menu_general(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await registrar_usuario(update.effective_user.id)
     await menu_general_texto(update)
 
 async def menu_general_texto(update: Update):
@@ -78,7 +97,6 @@ async def menu_general_texto(update: Update):
 
 # Comando /contacto
 async def contacto(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await registrar_usuario(update.effective_user.id)
     mensaje = (
         "📩 **Contacto Oficial:**\n\n"
         "Puedes escribir directamente al administrador aquí:\n"
@@ -88,13 +106,10 @@ async def contacto(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # Comando /tutorial
 async def tutorial(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await registrar_usuario(update.effective_user.id)
     await update.message.reply_text(" ")
 
-# Comando /estado (Muestra el estado actual de ambos servicios)
+# Comando /estado (Muestra el estado actual)
 async def estado(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await registrar_usuario(update.effective_user.id)
-    
     ext_icon = "🟢" if servicios_estado["external"]["activo"] else "🔴"
     ext_txt = "Operativo" if servicios_estado["external"]["activo"] else "En Mantenimiento"
     
@@ -108,7 +123,7 @@ async def estado(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     await update.message.reply_text(mensaje_estado, parse_mode="Markdown")
 
-# Función auxiliar para procesar el cambio de estado de un servicio
+# Función auxiliar para procesar cambio de estado
 async def procesar_cambio_estado(update: Update, context: ContextTypes.DEFAULT_TYPE, servicio_key: str):
     user_id = update.effective_user.id
     if user_id != ADMIN_ID:
@@ -144,15 +159,15 @@ async def procesar_cambio_estado(update: Update, context: ContextTypes.DEFAULT_T
 
     await update.message.reply_text(f"✅ Notificación de **{nombre_servicio}** enviada con éxito a {enviados} usuario(s).")
 
-# Comando /setexternal (Solo Admin)
+# Comando /setexternal
 async def set_external(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await procesar_cambio_estado(update, context, "external")
 
-# Comando /setproxy (Solo Admin)
+# Comando /setproxy
 async def set_proxy(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await procesar_cambio_estado(update, context, "proxy")
 
-# Comando /mensaje (Solo Admin) - Envío masivo personalizado
+# Comando /mensaje
 async def mensaje_masivo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     if user_id != ADMIN_ID:
@@ -177,7 +192,7 @@ async def mensaje_masivo(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
     await update.message.reply_text(f"✅ Mensaje enviado con éxito a {enviados} usuario(s).")
 
-# Comando /say (Solo Admin)
+# Comando /say
 async def say(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     if user_id != ADMIN_ID:
@@ -216,5 +231,5 @@ if __name__ == '__main__':
     app.add_handler(CommandHandler("mensaje", mensaje_masivo))
     app.add_handler(CommandHandler("say", say))
     
-    print("🤖 Bot listo con control individual de External y Proxy...")
+    print("🤖 Bot listo con avisos de nuevos registros...")
     app.run_polling()
