@@ -25,12 +25,13 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if user_id == ADMIN_ID:
         mensaje_publico += (
             "\n\n👑 **Hola Administrador:**\n"
-            "Usa `/menu` para ver tus comandos de control."
+            "• Usa `/menu` para ver tus comandos de control.\n"
+            "• Usa `/menugeneral` para ver el menú que ven los clientes."
         )
         
     await update.message.reply_text(mensaje_publico, parse_mode="Markdown")
 
-# Comando /menu (Muestra un menú personalizado según quién lo pida)
+# Comando /menu (Privado para el Admin, Público para los clientes)
 async def menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     
@@ -40,18 +41,27 @@ async def menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "👑 **Menú Privado de Administrador:**\n\n"
             "• `/setestado verde` - Cambia el estado del servidor a Verde (Operativo).\n"
             "• `/setestado rojo` - Cambia el estado del servidor a Rojo (Mantenimiento).\n"
-            "• `/say [mensaje]` - Envía un mensaje a través del bot."
+            "• `/say [mensaje]` - Envía un mensaje a través del bot.\n"
+            "• `/menugeneral` - Muestra el menú público de los clientes."
         )
         await update.message.reply_text(mensaje_admin, parse_mode="Markdown")
     else:
         # Menú para todos los usuarios clientes
-        mensaje_cliente = (
-            "📌 **Menú de Comandos Disponibles:**\n\n"
-            "• `/contacto` - Información de contacto.\n"
-            "• `/tutorial` - Guía e instrucciones.\n"
-            "• `/estado` - Consulta el estado del servidor."
-        )
-        await update.message.reply_text(mensaje_cliente, parse_mode="Markdown")
+        await menu_general_texto(update)
+
+# Comando /menugeneral (Ver el menú público de los usuarios)
+async def menu_general(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await menu_general_texto(update)
+
+# Función auxiliar para enviar el menú público
+async def menu_general_texto(update: Update):
+    mensaje_cliente = (
+        "📌 **Menú General (Público):**\n\n"
+        "• `/contacto` - Información de contacto.\n"
+        "• `/tutorial` - Guía e instrucciones.\n"
+        "• `/estado` - Consulta el estado del servidor."
+    )
+    await update.message.reply_text(mensaje_cliente, parse_mode="Markdown")
 
 # 1. Comando /contacto
 async def contacto(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -126,6 +136,7 @@ if __name__ == '__main__':
     # Handlers públicos
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("menu", menu))
+    app.add_handler(CommandHandler("menugeneral", menu_general))
     app.add_handler(CommandHandler("contacto", contacto))
     app.add_handler(CommandHandler("tutorial", tutorial))
     app.add_handler(CommandHandler("estado", estado))
@@ -134,5 +145,5 @@ if __name__ == '__main__':
     app.add_handler(CommandHandler("setestado", set_estado))
     app.add_handler(CommandHandler("say", say))
     
-    print("🤖 Bot cliente iniciado con menú dinámico...")
+    print("🤖 Bot cliente iniciado con menú general...")
     app.run_polling()
