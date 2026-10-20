@@ -1,15 +1,38 @@
+import json
+import os
 import logging
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
 
-# Tu NUEVO Token de Telegram
 TOKEN = "8657191025:AAFhFGtpi7bCPocU9FhCxTUPcwSRZdi5Hxo"
 
 # Tu ID de Administrador configurado
 ADMIN_ID = 8046948909  
 
-# Conjunto en memoria para almacenar los IDs de los usuarios
-usuarios_registrados = set()
+# Archivo donde guardaremos permanentemente los usuarios
+ARCHIVO_USUARIOS = "usuarios.json"
+
+def cargar_usuarios():
+    """Carga los IDs guardados en el archivo JSON"""
+    if os.path.exists(ARCHIVO_USUARIOS):
+        try:
+            with open(ARCHIVO_USUARIOS, "r", encoding="utf-8") as f:
+                datos = json.load(f)
+                return set(datos)
+        except Exception:
+            return set()
+    return set()
+
+def guardar_usuarios():
+    """Guarda los IDs en el archivo JSON"""
+    try:
+        with open(ARCHIVO_USUARIOS, "w", encoding="utf-8") as f:
+            json.dump(list(usuarios_registrados), f)
+    except Exception as e:
+        print(f"Error al guardar usuarios: {e}")
+
+# Cargar lista de usuarios al arrancar
+usuarios_registrados = cargar_usuarios()
 
 # Estados globales de los dos servicios
 servicios_estado = {
@@ -23,15 +46,13 @@ servicios_estado = {
     }
 }
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = update.effective_user
+def registrar_usuario_si_no_existe(user):
+    """Función auxiliar para registrar y notificar a nuevos usuarios"""
     user_id = user.id
-    
-    # Notifica al Administrador únicamente si es la primera vez que inicia el bot
     if user_id not in usuarios_registrados:
         usuarios_registrados.add(user_id)
+        guardar_usuarios()
         
-        # Si no eres tú mismo, te manda la alerta de nuevo registro
         if user_id != ADMIN_ID:
             username = f"@{user.username}" if user.username else "Sin username"
             nombre = user.full_name or "Usuario"
@@ -43,21 +64,29 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"🆔 **ID:** `{user_id}`\n"
                 f"📊 **Total registrados:** {len(usuarios_registrados)}"
             )
-            try:
-                await context.bot.send_message(
-                    chat_id=ADMIN_ID,
-                    text=mensaje_registro,
-                    parse_mode="Markdown"
-                )
-            except Exception:
-                pass
+            return mensaje_registro
+    return None
+
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    alerta_admin = registrar_usuario_si_no_existe(user)
+    
+    if alerta_admin:
+        try:
+            await context.bot.send_message(
+                chat_id=ADMIN_ID,
+                text=alerta_admin,
+                parse_mode="Markdown"
+            )
+        except Exception:
+            pass
 
     mensaje_publico = (
         "👋 **¡Bienvenido al Bot Oficial de CASAWA!**\n\n"
         "Usa el comando `/menu` para ver la lista de comandos disponibles."
     )
     
-    if user_id == ADMIN_ID:
+    if user.id == ADMIN_ID:
         mensaje_publico += (
             "\n\n👑 **Hola Administrador:**\n"
             "• Usa `/menu` para ver tus comandos de control.\n"
@@ -66,10 +95,22 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
     await update.message.reply_text(mensaje_publico, parse_mode="Markdown")
 
-# Comando /menu
+# Comando /menu (Registra al usuario también si no estaba en la lista)
 async def menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
+    user = update.effective_user
+    alerta_admin = registrar_usuario_si_no_existe(user)
     
+    if alerta_admin:
+        try:
+            await context.bot.send_message(
+                chat_id=ADMIN_ID,
+                text=alerta_admin,
+                parse_mode="Markdown"
+            )
+        except Exception:
+            pass
+
+    user_id = user.id
     if user_id == ADMIN_ID:
         mensaje_admin = (
             "👑 **Menú Privado de Administrador:**\n\n"
@@ -85,6 +126,8 @@ async def menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # Comando /menugeneral
 async def menu_general(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    registrar_usuario_si_no_existe(user)
     await menu_general_texto(update)
 
 async def menu_general_texto(update: Update):
@@ -98,6 +141,8 @@ async def menu_general_texto(update: Update):
 
 # Comando /contacto
 async def contacto(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    registrar_usuario_si_no_existe(user)
     mensaje = (
         "📩 **Contacto Oficial:**\n\n"
         "Puedes escribir directamente al administrador aquí:\n"
@@ -107,10 +152,15 @@ async def contacto(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # Comando /tutorial
 async def tutorial(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    registrar_usuario_si_no_existe(user)
     await update.message.reply_text(" ")
 
 # Comando /estado (Muestra el estado actual)
 async def estado(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    registrar_usuario_si_no_existe(user)
+    
     ext_icon = "🟢" if servicios_estado["external"]["activo"] else "🔴"
     ext_txt = "Operativo" if servicios_estado["external"]["activo"] else "En Mantenimiento"
     
@@ -168,11 +218,13 @@ async def set_external(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def set_proxy(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await procesar_cambio_estado(update, context, "proxy")
 
-# Comando /mensaje (Soporta texto y archivos multimedia con /mensaje en la descripción)
+# Comando /mensaje
 async def mensaje_masivo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     if user_id != ADMIN_ID:
         return
+
+    registrar_usuario_si_no_existe(update.effective_user)
 
     mensaje = update.message
     texto_difusion = " ".join(context.args) if context.args else ""
@@ -243,5 +295,5 @@ if __name__ == '__main__':
     app.add_handler(MessageHandler((filters.PHOTO | filters.VIDEO) & filters.CaptionRegex(r"^/mensaje"), mensaje_masivo))
     app.add_handler(CommandHandler("say", say))
     
-    print("🤖 Bot listo con el nuevo token y soporte para difusión multimedia...")
+    print("🤖 Bot listo: registro activo tanto en /start como en /menu...")
     app.run_polling()
