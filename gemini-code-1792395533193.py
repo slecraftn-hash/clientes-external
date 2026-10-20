@@ -242,5 +242,5 @@ if __name__ == '__main__':
     app.add_handler(MessageHandler((filters.PHOTO | filters.VIDEO) & filters.CaptionRegex(r"^/mensaje"), mensaje_masivo))
     app.add_handler(CommandHandler("say", say))
     
-    print("🤖 Bot listo con el nuevo token y soporte para fotos/videos en /mensaje...")
+    print("🤖 Bot listo con token limpio y soporte multimedia en /mensaje...")
     app.run_polling()
