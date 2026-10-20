@@ -12,8 +12,8 @@ from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 API_BASE = "http://155.117.40.185:10068"
 ADMIN_API_KEY = "Paloq!gg"
 
-# Token de tu bot
-TOKEN = "8998224860:AAHCxlM3GKXvrG7rgw_ZIpyfTR-44Of-9gk"
+# Tu NUEVO Token de Telegram
+TOKEN = "8657191025:AAFj284uOZGiXG1GkPmQ6LzpmjoGREnrkc8"
 
 # Tu ID de Telegram verificado (Exclusivo para Admin)
 ADMIN_IDS = [8046948909]
@@ -275,5 +275,5 @@ if __name__ == "__main__":
     app.add_handler(CommandHandler("comprobar", comprobar))
     app.add_handler(CommandHandler("eliminar", eliminar))
     
-    print("🤖 ¡Bot listo y sin conflictos de instancias!")
+    print("🤖 ¡Bot listo con el nuevo token y sin conflictos!")
     app.run_polling()
