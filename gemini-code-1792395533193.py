@@ -1,279 +1,235 @@
-import json
-import urllib.parse
-import urllib.request
-import urllib.error
-import secrets
-from datetime import datetime, timedelta
-from functools import wraps
+import logging
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 
-# Tus datos de la API correctos
-API_BASE = "http://155.117.40.185:10068"
-ADMIN_API_KEY = "Paloq!gg"
+TOKEN = "8657191025:AAFaZNt4IW-coJhQKbvgo4Uceu_BRNFSJHM"
 
-# Tu NUEVO Token de Telegram
-TOKEN = "8657191025:AAFj284uOZGiXG1GkPmQ6LzpmjoGREnrkc8"
+# Tu ID de Administrador configurado
+ADMIN_ID = 8046948909  
 
-# Tu ID de Telegram verificado (Exclusivo para Admin)
-ADMIN_IDS = [8046948909]
+# Conjunto en memoria para almacenar los IDs de los usuarios
+usuarios_registrados = set()
 
-# Diccionario donde guardaremos a los usuarios autorizados con su fecha de expiración
-USUARIOS_AUTORIZADOS = {} 
+# Estados globales de los dos servicios
+servicios_estado = {
+    "external": {
+        "activo": True,
+        "nombre": "External"
+    },
+    "proxy": {
+        "activo": True,
+        "nombre": "Proxy"
+    }
+}
 
-def restricted(func):
-    @wraps(func)
-    async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE):
-        user_id = update.effective_user.id
-        username = update.effective_user.username
-        
-        if user_id in ADMIN_IDS:
-            return await func(update, context)
-            
-        if username:
-            clean_username = username.lower()
-            if clean_username in USUARIOS_AUTORIZADOS:
-                fecha_expiracion = USUARIOS_AUTORIZADOS[clean_username]
-                if datetime.now() < fecha_expiracion:
-                    return await func(update, context)
-                else:
-                    del USUARIOS_AUTORIZADOS[clean_username]
-        
-        await update.message.reply_text("⛔ **Acceso denegado o membresía expirada.** No tienes autorización vigente para usar este bot.")
-        return
-    return wrapper
-
-def admin_only(func):
-    @wraps(func)
-    async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE):
-        user_id = update.effective_user.id
-        if user_id in ADMIN_IDS:
-            return await func(update, context)
-        
-        await update.message.reply_text("⛔ **Comando restringido.** Solo el administrador puede usar esta función.")
-        return
-    return wrapper
-
-def llamar_api(endpoint, params=None):
-    url = f"{API_BASE}/{ADMIN_API_KEY}/{endpoint}"
-    if params:
-        query = urllib.parse.urlencode(params)
-        url += f"?{query}"
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    user_id = user.id
     
-    try:
-        req = urllib.request.Request(url, headers={"User-Agent": "TelegramBot/1.0"})
-        with urllib.request.urlopen(req, timeout=15) as response:
-            body = response.read().decode('utf-8')
+    # Notifica al Administrador únicamente si es la primera vez que inicia el bot
+    if user_id not in usuarios_registrados:
+        usuarios_registrados.add(user_id)
+        
+        # Si no eres tú mismo, te manda la alerta de nuevo registro
+        if user_id != ADMIN_ID:
+            username = f"@{user.username}" if user.username else "Sin username"
+            nombre = user.full_name or "Usuario"
+
+            mensaje_registro = (
+                f"🎉 **¡Nuevo Usuario Registrado!**\n\n"
+                f"👤 **Nombre:** {nombre}\n"
+                f"🏷️ **User:** {username}\n"
+                f"🆔 **ID:** `{user_id}`\n"
+                f"📊 **Total registrados:** {len(usuarios_registrados)}"
+            )
             try:
-                return True, json.loads(body)
+                await context.bot.send_message(
+                    chat_id=ADMIN_ID,
+                    text=mensaje_registro,
+                    parse_mode="Markdown"
+                )
             except Exception:
-                return True, body
-    except urllib.error.HTTPError as e:
-        body = e.read().decode('utf-8', errors='replace')
-        return False, f"Error HTTP {e.code}: {body}"
-    except Exception as e:
-        return False, f"Error de conexión: {e}"
+                pass
 
-@restricted
+    mensaje_publico = (
+        "👋 **¡Bienvenido al Bot Oficial de CASAWA!**\n\n"
+        "Usa el comando `/menu` para ver la lista de comandos disponibles."
+    )
+    
+    if user_id == ADMIN_ID:
+        mensaje_publico += (
+            "\n\n👑 **Hola Administrador:**\n"
+            "• Usa `/menu` para ver tus comandos de control.\n"
+            "• Usa `/menugeneral` para ver el menú que ven los clientes."
+        )
+        
+    await update.message.reply_text(mensaje_publico, parse_mode="Markdown")
+
+# Comando /menu
 async def menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    texto_menu = (
-        "🤖 **MENÚ DE GESTIÓN DE KEYS** 🤖\n\n"
-        "Comandos disponibles:\n\n"
-        "• `/generar` [días]\n"
-        "  _Genera una key individual (Ej: /generar 30)_\n\n"
-        "• `/lote` [nombre] [cantidad] [días]\n"
-        "  _Genera múltiples keys (Ej: /lote file1 5 30)_\n\n"
-        "• `/comprobar` [key]\n"
-        "  _Revisa el estado de una key_\n\n"
-        "• `/eliminar` [key]\n"
-        "  _Borra una key_\n\n"
-        "• `/menu`\n"
-        "  _Muestra este menú_"
+    user_id = update.effective_user.id
+    
+    if user_id == ADMIN_ID:
+        mensaje_admin = (
+            "👑 **Menú Privado de Administrador:**\n\n"
+            "• `/setexternal verde` / `/setexternal rojo` - Cambia estado de External y notifica.\n"
+            "• `/setproxy verde` / `/setproxy rojo` - Cambia estado de Proxy y notifica.\n"
+            "• `/mensaje [texto]` - Envía un comunicado masivo a TODOS.\n"
+            "• `/say [texto]` - Envía un mensaje como el bot en este chat.\n"
+            "• `/menugeneral` - Muestra el menú público de los clientes."
+        )
+        await update.message.reply_text(mensaje_admin, parse_mode="Markdown")
+    else:
+        await menu_general_texto(update)
+
+# Comando /menugeneral
+async def menu_general(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await menu_general_texto(update)
+
+async def menu_general_texto(update: Update):
+    mensaje_cliente = (
+        "📌 **Menú General (Público):**\n\n"
+        "• `/contacto` - Información de contacto.\n"
+        "• `/tutorial` - Guía e instrucciones.\n"
+        "• `/estado` - Consulta el estado del External y Proxy."
     )
-    await update.message.reply_text(texto_menu, parse_mode="Markdown")
+    await update.message.reply_text(mensaje_cliente, parse_mode="Markdown")
 
-@admin_only
-async def menu_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    texto_admin = (
-        "👑 **MENÚ DE ADMINISTRACIÓN EXCLUSIVO** 👑\n\n"
-        "Comandos de control:\n\n"
-        "• `/agregar` [username] [días]\n"
-        "  _Da acceso temporal a un usuario (Ej: /agregar juanito 7)_\n\n"
-        "• `/borrar_todos`\n"
-        "  _Elimina todos los usuarios autorizados de la lista_\n\n"
-        "• `/mensaje` [texto] _(Adjuntando foto o video opcional)_\n"
-        "  _Envía un comunicado a los usuarios_\n\n"
-        "• `/menuadmin`\n"
-        "  _Muestra este panel de administración_"
+# Comando /contacto
+async def contacto(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    mensaje = (
+        "📩 **Contacto Oficial:**\n\n"
+        "Puedes escribir directamente al administrador aquí:\n"
+        "👉 @casawaxit"
     )
-    await update.message.reply_text(texto_admin, parse_mode="Markdown")
+    await update.message.reply_text(mensaje, parse_mode="Markdown")
 
-@admin_only
-async def agregar_usuario(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    args = context.args
-    if len(args) < 2:
-        await update.message.reply_text("⚠️ Uso correcto: `/agregar` [username] [días]\nEjemplo: `/agregar juanito 7`", parse_mode="Markdown")
-        return
+# Comando /tutorial
+async def tutorial(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(" ")
+
+# Comando /estado (Muestra el estado actual)
+async def estado(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    ext_icon = "🟢" if servicios_estado["external"]["activo"] else "🔴"
+    ext_txt = "Operativo" if servicios_estado["external"]["activo"] else "En Mantenimiento"
     
-    nuevo_user = args[0].replace("@", "").strip().lower()
-    try:
-        dias = int(args[1])
-    except ValueError:
-        await update.message.reply_text("⚠️ Los días deben ser un número entero. Ejemplo: `/agregar juanito 7`", parse_mode="Markdown")
-        return
-    
-    fecha_expiracion = datetime.now() + timedelta(days=dias)
-    USUARIOS_AUTORIZADOS[nuevo_user] = fecha_expiracion
-    
-    fecha_formateada = fecha_expiracion.strftime('%d/%m/%Y %H:%M')
-    await update.message.reply_text(
-        f"✅ ¡Usuario **@{nuevo_user}** autorizado por **{dias} días**!\n"
-        f"⏳ Válido hasta: `{fecha_formateada}`", 
-        parse_mode="Markdown"
+    proxy_icon = "🟢" if servicios_estado["proxy"]["activo"] else "🔴"
+    proxy_txt = "Operativo" if servicios_estado["proxy"]["activo"] else "En Mantenimiento"
+
+    mensaje_estado = (
+        "📊 **Estado Actual de los Servicios:**\n\n"
+        f"{ext_icon} **External:** {ext_txt}\n"
+        f"{proxy_icon} **Proxy:** {proxy_txt}"
     )
+    await update.message.reply_text(mensaje_estado, parse_mode="Markdown")
 
-@admin_only
-async def borrar_todos_usuarios(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    USUARIOS_AUTORIZADOS.clear()
-    await update.message.reply_text("🗑️ **¡Lista vaciada!** Se han eliminado todos los usuarios autorizados del sistema.", parse_mode="Markdown")
-
-@admin_only
-async def enviar_mensaje(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    mensaje = update.message
-    texto_a_enviar = " ".join(context.args) if context.args else ""
-    if not texto_a_enviar and mensaje.caption:
-        texto_a_enviar = mensaje.caption.replace("/mensaje", "").strip()
-    
-    if not USUARIOS_AUTORIZADOS:
-        await update.message.reply_text("⚠️ No hay usuarios autorizados en la lista para enviar comunicados.")
+# Función auxiliar para procesar cambio de estado
+async def procesar_cambio_estado(update: Update, context: ContextTypes.DEFAULT_TYPE, servicio_key: str):
+    user_id = update.effective_user.id
+    if user_id != ADMIN_ID:
         return
 
-    if not texto_a_enviar and not mensaje.photo and not mensaje.video:
-        await update.message.reply_text("⚠️ Escribe un texto o adjunta una foto/video con el comando `/mensaje`.", parse_mode="Markdown")
+    if not context.args:
+        await update.message.reply_text(f"⚠️ Uso correcto: `/set{servicio_key} verde` o `/set{servicio_key} rojo`", parse_mode="Markdown")
         return
-    
-    await update.message.reply_text(f"🚀 Enviando comunicado masivo a {len(USUARIOS_AUTORIZADOS)} usuario(s)...")
+
+    opcion = context.args[0].lower()
+    nombre_servicio = servicios_estado[servicio_key]["nombre"]
+    notificacion = ""
+
+    if opcion in ["verde", "on", "activo"]:
+        servicios_estado[servicio_key]["activo"] = True
+        notificacion = f"📢 **Actualización de Servicio:**\n\n🟢 El servicio **{nombre_servicio}** se encuentra **OPERATIVO** y funcionando al 100%."
+    elif opcion in ["rojo", "off", "mantenimiento"]:
+        servicios_estado[servicio_key]["activo"] = False
+        notificacion = f"📢 **Actualización de Servicio:**\n\n🔴 El servicio **{nombre_servicio}** ha entrado en **MANTENIMIENTO**. Les avisaremos cuando esté activo nuevamente."
+    else:
+        await update.message.reply_text("⚠️ Opción no válida. Usa `verde` o `rojo`.", parse_mode="Markdown")
+        return
+
+    await update.message.reply_text(f"🚀 Estado de **{nombre_servicio}** actualizado. Enviando notificación masiva a {len(usuarios_registrados)} usuario(s)...", parse_mode="Markdown")
     
     enviados = 0
-    for user in USUARIOS_AUTORIZADOS:
+    for uid in list(usuarios_registrados):
         try:
-            chat_destino = f"@{user}"
-            if mensaje.photo:
-                photo_file = mensaje.photo[-1].file_id
-                await context.bot.send_photo(chat_id=chat_destino, photo=photo_file, caption=texto_a_enviar, parse_mode="Markdown")
-            elif mensaje.video:
-                video_file = mensaje.video.file_id
-                await context.bot.send_video(chat_id=chat_destino, video=video_file, caption=texto_a_enviar, parse_mode="Markdown")
-            else:
-                await context.bot.send_message(chat_id=chat_destino, text=f"📢 **Comunicado:**\n\n{texto_a_enviar}", parse_mode="Markdown")
+            await context.bot.send_message(chat_id=uid, text=notificacion, parse_mode="Markdown")
             enviados += 1
-        except Exception as e:
-            print(f"Error al enviar a {user}: {e}")
+        except Exception:
+            pass
+
+    await update.message.reply_text(f"✅ Notificación de **{nombre_servicio}** enviada con éxito a {enviados} usuario(s).")
+
+# Comando /setexternal
+async def set_external(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await procesar_cambio_estado(update, context, "external")
+
+# Comando /setproxy
+async def set_proxy(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await procesar_cambio_estado(update, context, "proxy")
+
+# Comando /mensaje
+async def mensaje_masivo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    if user_id != ADMIN_ID:
+        return
+
+    if not context.args:
+        await update.message.reply_text("⚠️ Uso correcto: `/mensaje [tu comunicado o aviso]`", parse_mode="Markdown")
+        return
+
+    texto_difusion = " ".join(context.args)
+    comunicado_completo = f"📢 **Aviso General:**\n\n{texto_difusion}"
+    
+    await update.message.reply_text(f"🚀 Enviando comunicado masivo a {len(usuarios_registrados)} usuario(s)...")
+    
+    enviados = 0
+    for uid in list(usuarios_registrados):
+        try:
+            await context.bot.send_message(chat_id=uid, text=comunicado_completo, parse_mode="Markdown")
+            enviados += 1
+        except Exception:
+            pass
             
     await update.message.reply_text(f"✅ Mensaje enviado con éxito a {enviados} usuario(s).")
 
-@restricted
-async def generar(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    args = context.args
-    days = args[0] if args else "10"
-    
-    key_aleatoria = f"csw_{secrets.token_hex(4).upper()}"
-    exito, res = llamar_api("generate", {"key": key_aleatoria, "days": days})
-    
-    if exito:
-        mensaje = f"✅ **¡Key Generada!**\n\n🔑 `{key_aleatoria}`\n⏳ **Duración:** {days} días"
-    else:
-        mensaje = f"❌ **Error:**\n`{res}`"
-        
-    await update.message.reply_text(mensaje, parse_mode="Markdown")
-
-@restricted
-async def lote(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    args = context.args
-    if len(args) < 3:
-        await update.message.reply_text("⚠️ Usa: `/lote` [nombre] [cantidad] [días]", parse_mode="Markdown")
+# Comando /say
+async def say(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    if user_id != ADMIN_ID:
         return
-    
-    name = args[0]
+
+    if not context.args:
+        await update.message.reply_text("⚠️ Uso: `/say [mensaje]`", parse_mode="Markdown")
+        return
+
+    mensaje_a_enviar = " ".join(context.args)
     try:
-        count = int(args[1])
-        days = args[2]
-    except ValueError:
-        await update.message.reply_text("⚠️ La cantidad debe ser un número entero.", parse_mode="Markdown")
-        return
+        await update.message.delete()
+    except Exception:
+        pass
 
-    if count > 30:
-        await update.message.reply_text("⚠️ Máximo 30 keys por lote.", parse_mode="Markdown")
-        return
+    await context.bot.send_message(
+        chat_id=update.effective_chat.id, 
+        text=mensaje_a_enviar,
+        parse_mode="Markdown"
+    )
 
-    exito, res = llamar_api("batch/generate", {"name": name, "count": count, "days": days})
-    
-    if exito and isinstance(res, dict):
-        results = res.get("results", [])
-        keys_extraidas = [item.get("key") for item in results if "key" in item]
-        
-        if keys_extraidas:
-            keys_texto = "\n".join([f"• `{k}`" for k in keys_extraidas])
-            mensaje = f"📦 **Lote: `{name}`** | ⏳ **{days} días**\n\n{keys_texto}"
-        else:
-            mensaje = f"📦 **¡Lote Generado Exitosamente!** (No se encontraron keys en la respuesta)."
-    else:
-        mensaje = f"❌ **Error al generar el lote:**\n`{res}`"
-        
-    await update.message.reply_text(mensaje, parse_mode="Markdown")
-
-@restricted
-async def comprobar(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    args = context.args
-    if not args:
-        await update.message.reply_text("⚠️ Escribe la key a comprobar.", parse_mode="Markdown")
-        return
-    
-    key = args[0]
-    exito, res = llamar_api("check", {"key": key})
-    
-    if exito:
-        mensaje = f"🔍 **Key:** `{key}`\n📌 **Respuesta API:** `{res}`"
-    else:
-        mensaje = f"❌ **Error:**\n`{res}`"
-        
-    await update.message.reply_text(mensaje, parse_mode="Markdown")
-
-@restricted
-async def eliminar(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    args = context.args
-    if not args:
-        await update.message.reply_text("⚠️ Escribe la key que quieres eliminar.", parse_mode="Markdown")
-        return
-    
-    key = args[0]
-    exito, res = llamar_api("delete", {"key": key})
-    
-    if exito:
-        mensaje = f"🗑️ **Key eliminada o procesada:**\n`{key}`"
-    else:
-        mensaje = f"❌ **Error:**\n`{res}`"
-        
-    await update.message.reply_text(mensaje, parse_mode="Markdown")
-
-if __name__ == "__main__":
+if __name__ == '__main__':
     app = ApplicationBuilder().token(TOKEN).build()
     
-    app.add_handler(CommandHandler("start", menu))
+    # Handlers públicos
+    app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("menu", menu))
-    app.add_handler(CommandHandler("ayuda", menu))
-    app.add_handler(CommandHandler("help", menu))
+    app.add_handler(CommandHandler("menugeneral", menu_general))
+    app.add_handler(CommandHandler("contacto", contacto))
+    app.add_handler(CommandHandler("tutorial", tutorial))
+    app.add_handler(CommandHandler("estado", estado))
     
-    app.add_handler(CommandHandler("menuadmin", menu_admin))
+    # Handlers privados para el Administrador
+    app.add_handler(CommandHandler("setexternal", set_external))
+    app.add_handler(CommandHandler("setproxy", set_proxy))
+    app.add_handler(CommandHandler("mensaje", mensaje_masivo))
+    app.add_handler(CommandHandler("say", say))
     
-    app.add_handler(CommandHandler("agregar", agregar_usuario))
-    app.add_handler(CommandHandler("borrar_todos", borrar_todos_usuarios))
-    app.add_handler(CommandHandler("mensaje", enviar_mensaje))
-    
-    app.add_handler(CommandHandler("generar", generar))
-    app.add_handler(CommandHandler("lote", lote))
-    app.add_handler(CommandHandler("comprobar", comprobar))
-    app.add_handler(CommandHandler("eliminar", eliminar))
-    
-    print("🤖 ¡Bot listo con el nuevo token y sin conflictos!")
+    print("🤖 Bot listo con avisos de nuevos registros...")
     app.run_polling()
