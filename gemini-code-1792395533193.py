@@ -1,6 +1,6 @@
 import logging
 from telegram import Update
-from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
+from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
 
 TOKEN = "8657191025:AAFaZNt4IW-coJhQKbvgo4Uceu_BRNFSJHM"
 
@@ -74,7 +74,7 @@ async def menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "👑 **Menú Privado de Administrador:**\n\n"
             "• `/setexternal verde` / `/setexternal rojo` - Cambia estado de External y notifica.\n"
             "• `/setproxy verde` / `/setproxy rojo` - Cambia estado de Proxy y notifica.\n"
-            "• `/mensaje [texto]` - Envía un comunicado masivo a TODOS.\n"
+            "• `/mensaje [texto]` (o adjuntando foto/video) - Envía un comunicado masivo a TODOS.\n"
             "• `/say [texto]` - Envía un mensaje como el bot en este chat.\n"
             "• `/menugeneral` - Muestra el menú público de los clientes."
         )
@@ -167,28 +167,38 @@ async def set_external(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def set_proxy(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await procesar_cambio_estado(update, context, "proxy")
 
-# Comando /mensaje
+# Comando /mensaje (Soporta texto y archivos multimedia con /mensaje en la descripción)
 async def mensaje_masivo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     if user_id != ADMIN_ID:
         return
 
-    if not context.args:
-        await update.message.reply_text("⚠️ Uso correcto: `/mensaje [tu comunicado o aviso]`", parse_mode="Markdown")
+    mensaje = update.message
+    texto_difusion = " ".join(context.args) if context.args else ""
+    if not texto_difusion and mensaje.caption:
+        texto_difusion = mensaje.caption.replace("/mensaje", "").strip()
+
+    if not texto_difusion and not mensaje.photo and not mensaje.video:
+        await update.message.reply_text("⚠️ Escribe un texto o adjunta una foto/video con el comando `/mensaje`.", parse_mode="Markdown")
         return
 
-    texto_difusion = " ".join(context.args)
-    comunicado_completo = f"📢 **Aviso General:**\n\n{texto_difusion}"
-    
     await update.message.reply_text(f"🚀 Enviando comunicado masivo a {len(usuarios_registrados)} usuario(s)...")
     
     enviados = 0
     for uid in list(usuarios_registrados):
         try:
-            await context.bot.send_message(chat_id=uid, text=comunicado_completo, parse_mode="Markdown")
+            if mensaje.photo:
+                photo_file = mensaje.photo[-1].file_id
+                await context.bot.send_photo(chat_id=uid, photo=photo_file, caption=texto_difusion, parse_mode="Markdown")
+            elif mensaje.video:
+                video_file = mensaje.video.file_id
+                await context.bot.send_video(chat_id=uid, video=video_file, caption=texto_difusion, parse_mode="Markdown")
+            else:
+                comunicado_completo = f"📢 **Aviso General:**\n\n{texto_difusion}"
+                await context.bot.send_message(chat_id=uid, text=comunicado_completo, parse_mode="Markdown")
             enviados += 1
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"Error al enviar a {uid}: {e}")
             
     await update.message.reply_text(f"✅ Mensaje enviado con éxito a {enviados} usuario(s).")
 
@@ -229,7 +239,8 @@ if __name__ == '__main__':
     app.add_handler(CommandHandler("setexternal", set_external))
     app.add_handler(CommandHandler("setproxy", set_proxy))
     app.add_handler(CommandHandler("mensaje", mensaje_masivo))
+    app.add_handler(MessageHandler((filters.PHOTO | filters.VIDEO) & filters.CaptionRegex(r"^/mensaje"), mensaje_masivo))
     app.add_handler(CommandHandler("say", say))
     
-    print("🤖 Bot listo con avisos de nuevos registros...")
+    print("🤖 Bot listo con el nuevo token y soporte para fotos/videos en /mensaje...")
     app.run_polling()
