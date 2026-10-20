@@ -2,7 +2,8 @@ import logging
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
 
-TOKEN = "8657191025:AAFaZNt4IW-coJhQKbvgo4Uceu_BRNFSJHM"
+# Tu NUEVO Token de Telegram
+TOKEN = "8657191025:AAFhFGtpi7bCPocU9FhCxTUPcwSRZdi5Hxo"
 
 # Tu ID de Administrador configurado
 ADMIN_ID = 8046948909  
@@ -242,5 +243,5 @@ if __name__ == '__main__':
     app.add_handler(MessageHandler((filters.PHOTO | filters.VIDEO) & filters.CaptionRegex(r"^/mensaje"), mensaje_masivo))
     app.add_handler(CommandHandler("say", say))
     
-    print("🤖 Bot listo con token limpio y soporte multimedia en /mensaje...")
+    print("🤖 Bot listo con el nuevo token y soporte para difusión multimedia...")
     app.run_polling()
