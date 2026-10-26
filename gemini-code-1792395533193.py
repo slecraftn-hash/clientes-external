@@ -4,7 +4,7 @@ import logging
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
 
-TOKEN = "8998224860:AAGeMUEusB80s1GPS3jBbvDJjgytqg_dbdI"
+TOKEN = "8657191025:AAEvTA1iWFE0hz2hZJq_hTNBO4Rq6vh1vLQ"
 
 # Tu ID de Administrador configurado
 ADMIN_ID = 8046948909  
@@ -292,15 +292,4 @@ if __name__ == '__main__':
     app.add_handler(CommandHandler("menugeneral", menu_general))
     app.add_handler(CommandHandler("contacto", contacto))
     app.add_handler(CommandHandler("tutorial", tutorial))
-    app.add_handler(CommandHandler("estado", estado))
-    
-    # Handlers privados para el Administrador (Captura cualquier archivo con descripción /mensaje)
-    app.add_handler(CommandHandler("mensaje", mensaje_masivo))
-    app.add_handler(MessageHandler(filters.CaptionRegex(r"^/mensaje"), mensaje_masivo))
-    
-    app.add_handler(CommandHandler("setexternal", set_external))
-    app.add_handler(CommandHandler("setproxy", set_proxy))
-    app.add_handler(CommandHandler("say", say))
-    
-    print("🤖 Bot listo con soporte universal de archivos y textos en /mensaje...")
-    app.run_polling()
+    app.add_handler(CommandHandler("estado
