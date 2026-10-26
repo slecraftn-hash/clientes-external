@@ -4,7 +4,7 @@ import logging
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
 
-TOKEN = "8657191025:AAFhFGtpi7bCPocU9FhCxTUPcwSRZdi5Hxo"
+TOKEN = "8998224860:AAGeMUEusB80s1GPS3jBbvDJjgytqg_dbdI"
 
 # Tu ID de Administrador configurado
 ADMIN_ID = 8046948909  
@@ -46,14 +46,9 @@ servicios_estado = {
     }
 }
 
-async def auto_registrar_middleware(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Registra a cualquier usuario que interactúe de cualquier forma con el bot"""
-    if not update.effective_user:
-        return
-        
-    user = update.effective_user
+def registrar_usuario_si_no_existe(user):
+    """Función auxiliar para registrar y notificar a nuevos usuarios"""
     user_id = user.id
-    
     if user_id not in usuarios_registrados:
         usuarios_registrados.add(user_id)
         guardar_usuarios()
@@ -69,19 +64,23 @@ async def auto_registrar_middleware(update: Update, context: ContextTypes.DEFAUL
                 f"🆔 **ID:** `{user_id}`\n"
                 f"📊 **Total registrados:** {len(usuarios_registrados)}"
             )
-            try:
-                await context.bot.send_message(
-                    chat_id=ADMIN_ID,
-                    text=mensaje_registro,
-                    parse_mode="Markdown"
-                )
-            except Exception:
-                pass
+            return mensaje_registro
+    return None
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await auto_registrar_middleware(update, context)
     user = update.effective_user
+    alerta_admin = registrar_usuario_si_no_existe(user)
     
+    if alerta_admin:
+        try:
+            await context.bot.send_message(
+                chat_id=ADMIN_ID,
+                text=alerta_admin,
+                parse_mode="Markdown"
+            )
+        except Exception:
+            pass
+
     mensaje_publico = (
         "👋 **¡Bienvenido al Bot Oficial de CASAWA!**\n\n"
         "Usa el comando `/menu` para ver la lista de comandos disponibles."
@@ -98,15 +97,26 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # Comando /menu
 async def menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await auto_registrar_middleware(update, context)
-    user_id = update.effective_user.id
+    user = update.effective_user
+    alerta_admin = registrar_usuario_si_no_existe(user)
     
+    if alerta_admin:
+        try:
+            await context.bot.send_message(
+                chat_id=ADMIN_ID,
+                text=alerta_admin,
+                parse_mode="Markdown"
+            )
+        except Exception:
+            pass
+
+    user_id = user.id
     if user_id == ADMIN_ID:
         mensaje_admin = (
             "👑 **Menú Privado de Administrador:**\n\n"
             "• `/setexternal verde` / `/setexternal rojo` - Cambia estado de External y notifica.\n"
             "• `/setproxy verde` / `/setproxy rojo` - Cambia estado de Proxy y notifica.\n"
-            "• `/mensaje [texto]` (o adjuntando foto/video) - Envía un comunicado masivo a TODOS.\n"
+            "• `/mensaje [texto o archivo con /mensaje]` - Envía un comunicado masivo con enlaces, fotos o archivos.\n"
             "• `/say [texto]` - Envía un mensaje como el bot en este chat.\n"
             "• `/menugeneral` - Muestra el menú público de los clientes."
         )
@@ -116,7 +126,8 @@ async def menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # Comando /menugeneral
 async def menu_general(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await auto_registrar_middleware(update, context)
+    user = update.effective_user
+    registrar_usuario_si_no_existe(user)
     await menu_general_texto(update)
 
 async def menu_general_texto(update: Update):
@@ -130,7 +141,8 @@ async def menu_general_texto(update: Update):
 
 # Comando /contacto
 async def contacto(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await auto_registrar_middleware(update, context)
+    user = update.effective_user
+    registrar_usuario_si_no_existe(user)
     mensaje = (
         "📩 **Contacto Oficial:**\n\n"
         "Puedes escribir directamente al administrador aquí:\n"
@@ -140,12 +152,14 @@ async def contacto(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # Comando /tutorial
 async def tutorial(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await auto_registrar_middleware(update, context)
+    user = update.effective_user
+    registrar_usuario_si_no_existe(user)
     await update.message.reply_text(" ")
 
 # Comando /estado
 async def estado(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await auto_registrar_middleware(update, context)
+    user = update.effective_user
+    registrar_usuario_si_no_existe(user)
     
     ext_icon = "🟢" if servicios_estado["external"]["activo"] else "🔴"
     ext_txt = "Operativo" if servicios_estado["external"]["activo"] else "En Mantenimiento"
@@ -162,7 +176,6 @@ async def estado(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # Función auxiliar para procesar cambio de estado
 async def procesar_cambio_estado(update: Update, context: ContextTypes.DEFAULT_TYPE, servicio_key: str):
-    await auto_registrar_middleware(update, context)
     user_id = update.effective_user.id
     if user_id != ADMIN_ID:
         return
@@ -205,20 +218,21 @@ async def set_external(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def set_proxy(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await procesar_cambio_estado(update, context, "proxy")
 
-# Comando /mensaje
+# Comando /mensaje (Soporta texto, enlaces, fotos, videos y cualquier tipo de archivo)
 async def mensaje_masivo(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await auto_registrar_middleware(update, context)
     user_id = update.effective_user.id
     if user_id != ADMIN_ID:
         return
+
+    registrar_usuario_si_no_existe(update.effective_user)
 
     mensaje = update.message
     texto_difusion = " ".join(context.args) if context.args else ""
     if not texto_difusion and mensaje.caption:
         texto_difusion = mensaje.caption.replace("/mensaje", "").strip()
 
-    if not texto_difusion and not mensaje.photo and not mensaje.video:
-        await update.message.reply_text("⚠️ Escribe un texto o adjunta una foto/video con el comando `/mensaje`.", parse_mode="Markdown")
+    if not texto_difusion and not mensaje.photo and not mensaje.video and not mensaje.document and not mensaje.audio:
+        await update.message.reply_text("⚠️ Escribe un texto, pon un enlace o adjunta un archivo/foto/video con el comando `/mensaje`.", parse_mode="Markdown")
         return
 
     await update.message.reply_text(f"🚀 Enviando comunicado masivo a {len(usuarios_registrados)} usuario(s)...")
@@ -232,9 +246,15 @@ async def mensaje_masivo(update: Update, context: ContextTypes.DEFAULT_TYPE):
             elif mensaje.video:
                 video_file = mensaje.video.file_id
                 await context.bot.send_video(chat_id=uid, video=video_file, caption=texto_difusion, parse_mode="Markdown")
+            elif mensaje.document:
+                doc_file = mensaje.document.file_id
+                await context.bot.send_document(chat_id=uid, document=doc_file, caption=texto_difusion, parse_mode="Markdown")
+            elif mensaje.audio:
+                audio_file = mensaje.audio.file_id
+                await context.bot.send_audio(chat_id=uid, audio=audio_file, caption=texto_difusion, parse_mode="Markdown")
             else:
                 comunicado_completo = f"📢 **Aviso General:**\n\n{texto_difusion}"
-                await context.bot.send_message(chat_id=uid, text=comunicado_completo, parse_mode="Markdown")
+                await context.bot.send_message(chat_id=uid, text=comunicado_completo, parse_mode="Markdown", disable_web_page_preview=False)
             enviados += 1
         except Exception as e:
             print(f"Error al enviar a {uid}: {e}")
@@ -243,7 +263,6 @@ async def mensaje_masivo(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # Comando /say
 async def say(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await auto_registrar_middleware(update, context)
     user_id = update.effective_user.id
     if user_id != ADMIN_ID:
         return
@@ -275,12 +294,13 @@ if __name__ == '__main__':
     app.add_handler(CommandHandler("tutorial", tutorial))
     app.add_handler(CommandHandler("estado", estado))
     
-    # Handlers privados para el Administrador
+    # Handlers privados para el Administrador (Captura cualquier archivo con descripción /mensaje)
+    app.add_handler(CommandHandler("mensaje", mensaje_masivo))
+    app.add_handler(MessageHandler(filters.CaptionRegex(r"^/mensaje"), mensaje_masivo))
+    
     app.add_handler(CommandHandler("setexternal", set_external))
     app.add_handler(CommandHandler("setproxy", set_proxy))
-    app.add_handler(CommandHandler("mensaje", mensaje_masivo))
-    app.add_handler(MessageHandler((filters.PHOTO | filters.VIDEO) & filters.CaptionRegex(r"^/mensaje"), mensaje_masivo))
     app.add_handler(CommandHandler("say", say))
     
-    print("🤖 Bot listo: auto-registro global en cualquier comando...")
+    print("🤖 Bot listo con soporte universal de archivos y textos en /mensaje...")
     app.run_polling()
